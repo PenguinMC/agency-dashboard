@@ -108,10 +108,13 @@ Description: ${description || 'No additional details provided.'}
 
 ## Instructions
 - Complete the task described above to the best of your ability.
-- Create any necessary files in the current working directory.
-- When done, write a comprehensive summary of what you accomplished to a file called RESULT.md.
+- You have full access to the filesystem and can run any commands.
+- Create output files in the current working directory (${taskDir}).
+- When done, write a comprehensive summary of what you accomplished to RESULT.md in the current directory.
 - Be thorough and produce real, usable output.
-- Commit your work with a descriptive message when done.`;
+- You can access the internet, search the web, read files anywhere on the system.
+- If the task involves code, write production-quality code.
+- If the task involves research, be thorough and cite sources.`;
 
   log(`Spawning agent '${agentName}' for: ${title}`);
 
@@ -161,10 +164,10 @@ Description: ${description || 'No additional details provided.'}
         } catch {}
 
         await apiPatch(id, {
-          status: 'review',
+          status: 'done',
           output: resultContent || `Agent completed. Output in ${taskDir}`,
         });
-        await addLog(id, 'Task completed successfully, moved to review', 'success');
+        await addLog(id, 'Task completed successfully', 'success');
         log(`Agent '${agentName}' completed: ${title}`);
       } else {
         await addLog(id, `Agent exited with error (code ${code}). Check logs at ${logFile}`, 'error');
