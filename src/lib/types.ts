@@ -38,6 +38,8 @@ export interface TasksState {
 }
 
 export type TasksAction =
+  | { type: 'SET_TASKS'; payload: Task[] }
+  | { type: 'SET_AGENTS'; payload: Agent[] }
   | { type: 'CREATE_TASK'; payload: Task }
   | { type: 'UPDATE_TASK'; payload: Partial<Task> & { id: string } }
   | { type: 'DELETE_TASK'; payload: { id: string } }

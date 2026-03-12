@@ -1,11 +1,18 @@
 'use client';
 
-import { createContext, useContext, useReducer, ReactNode } from 'react';
-import { Task, TasksState, TasksAction, TaskStatus } from './types';
-import { INITIAL_TASKS, AGENTS } from './mockData';
+import { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
+import { Task, Agent, TasksState, TasksAction, TaskStatus } from './types';
+
+const API_BASE = '/api';
 
 function tasksReducer(state: TasksState, action: TasksAction): TasksState {
   switch (action.type) {
+    case 'SET_TASKS':
+      return { ...state, tasks: action.payload };
+
+    case 'SET_AGENTS':
+      return { ...state, agents: action.payload };
+
     case 'CREATE_TASK':
       return { ...state, tasks: [action.payload, ...state.tasks] };
 
@@ -53,18 +60,119 @@ function tasksReducer(state: TasksState, action: TasksAction): TasksState {
 interface TasksContextValue {
   state: TasksState;
   dispatch: React.Dispatch<TasksAction>;
+  refresh: () => Promise<void>;
+  apiCreateTask: (data: Partial<Task>) => Promise<Task | null>;
+  apiUpdateTask: (id: string, data: Partial<Task>) => Promise<Task | null>;
+  apiDeleteTask: (id: string) => Promise<boolean>;
+  apiMoveTask: (id: string, status: TaskStatus) => Promise<Task | null>;
 }
 
 const TasksContext = createContext<TasksContextValue | null>(null);
 
 export function TasksProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(tasksReducer, {
-    tasks: INITIAL_TASKS,
-    agents: AGENTS,
+    tasks: [],
+    agents: [],
   });
 
+  const refresh = useCallback(async () => {
+    try {
+      const [tasksRes, agentsRes] = await Promise.all([
+        fetch(`${API_BASE}/tasks`),
+        fetch(`${API_BASE}/agents`),
+      ]);
+      if (tasksRes.ok) {
+        const { tasks } = await tasksRes.json();
+        dispatch({ type: 'SET_TASKS' as const, payload: tasks } as TasksAction);
+      }
+      if (agentsRes.ok) {
+        const { agents } = await agentsRes.json();
+        dispatch({ type: 'SET_AGENTS' as const, payload: agents } as TasksAction);
+      }
+    } catch (err) {
+      console.error('Failed to refresh:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    // Poll every 10 seconds for updates from agents
+    const interval = setInterval(refresh, 10000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  const apiCreateTask = useCallback(async (data: Partial<Task>): Promise<Task | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        const { task } = await res.json();
+        dispatch({ type: 'CREATE_TASK', payload: task });
+        return task;
+      }
+    } catch (err) {
+      console.error('Failed to create task:', err);
+    }
+    return null;
+  }, []);
+
+  const apiUpdateTask = useCallback(async (id: string, data: Partial<Task>): Promise<Task | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        const { task } = await res.json();
+        dispatch({ type: 'UPDATE_TASK', payload: { id, ...task } });
+        return task;
+      }
+    } catch (err) {
+      console.error('Failed to update task:', err);
+    }
+    return null;
+  }, []);
+
+  const apiDeleteTask = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        dispatch({ type: 'DELETE_TASK', payload: { id } });
+        return true;
+      }
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+    }
+    return false;
+  }, []);
+
+  const apiMoveTask = useCallback(async (id: string, status: TaskStatus): Promise<Task | null> => {
+    // Optimistic update
+    dispatch({ type: 'MOVE_TASK', payload: { id, status } });
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        const { task } = await res.json();
+        return task;
+      }
+    } catch (err) {
+      console.error('Failed to move task:', err);
+      // Refresh to revert optimistic update
+      refresh();
+    }
+    return null;
+  }, [refresh]);
+
   return (
-    <TasksContext.Provider value={{ state, dispatch }}>
+    <TasksContext.Provider value={{ state, dispatch, refresh, apiCreateTask, apiUpdateTask, apiDeleteTask, apiMoveTask }}>
       {children}
     </TasksContext.Provider>
   );

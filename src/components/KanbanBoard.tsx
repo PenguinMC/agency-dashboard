@@ -15,10 +15,6 @@ const COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
   { status: 'done',        label: 'Done',         color: 'text-green-400' },
 ];
 
-function genId() {
-  return `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
 interface Props {
   search: string;
   filterAgent: string;
@@ -26,7 +22,7 @@ interface Props {
 }
 
 export default function KanbanBoard({ search, filterAgent, filterPriority }: Props) {
-  const { state, dispatch } = useTasks();
+  const { state, apiCreateTask, apiUpdateTask, apiMoveTask } = useTasks();
   const [modalOpen, setModalOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>('todo');
@@ -42,7 +38,7 @@ export default function KanbanBoard({ search, filterAgent, filterPriority }: Pro
     if (!result.destination) return;
     const newStatus = result.destination.droppableId as TaskStatus;
     const taskId = result.draggableId;
-    dispatch({ type: 'MOVE_TASK', payload: { id: taskId, status: newStatus } });
+    apiMoveTask(taskId, newStatus);
   }
 
   function openNewTask(status: TaskStatus) {
@@ -51,27 +47,11 @@ export default function KanbanBoard({ search, filterAgent, filterPriority }: Pro
     setModalOpen(true);
   }
 
-  function handleSave(data: Partial<Task>) {
+  async function handleSave(data: Partial<Task>) {
     if (editTask) {
-      dispatch({ type: 'UPDATE_TASK', payload: { id: editTask.id, ...data } });
+      await apiUpdateTask(editTask.id, data);
     } else {
-      const now = new Date().toISOString();
-      dispatch({
-        type: 'CREATE_TASK',
-        payload: {
-          id: genId(),
-          title: data.title ?? '',
-          description: data.description ?? '',
-          status: data.status ?? newTaskStatus,
-          priority: data.priority ?? 'medium',
-          agent_id: data.agent_id ?? '',
-          agent_name: data.agent_name ?? '',
-          agent_emoji: data.agent_emoji ?? '',
-          created_at: now,
-          updated_at: now,
-          logs: [{ id: `l-${Date.now()}`, timestamp: now, message: 'Task created', type: 'info' }],
-        },
-      });
+      await apiCreateTask({ ...data, status: data.status ?? newTaskStatus });
     }
   }
 

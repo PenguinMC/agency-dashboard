@@ -4,16 +4,12 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useTasks } from '@/lib/store';
 import TaskModal from '@/components/TaskModal';
-import { Task, TaskStatus } from '@/lib/types';
+import { Task } from '@/lib/types';
 
 const KanbanBoard = dynamic(() => import('@/components/KanbanBoard'), { ssr: false });
 
-function genId() {
-  return `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
 export default function DashboardPage() {
-  const { state, dispatch } = useTasks();
+  const { state, apiCreateTask } = useTasks();
   const [search, setSearch] = useState('');
   const [filterAgent, setFilterAgent] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -26,24 +22,8 @@ export default function DashboardPage() {
     done: state.tasks.filter((t) => t.status === 'done').length,
   };
 
-  function handleCreateTask(data: Partial<Task>) {
-    const now = new Date().toISOString();
-    dispatch({
-      type: 'CREATE_TASK',
-      payload: {
-        id: genId(),
-        title: data.title ?? '',
-        description: data.description ?? '',
-        status: (data.status ?? 'todo') as TaskStatus,
-        priority: data.priority ?? 'medium',
-        agent_id: data.agent_id ?? '',
-        agent_name: data.agent_name ?? '',
-        agent_emoji: data.agent_emoji ?? '',
-        created_at: now,
-        updated_at: now,
-        logs: [{ id: `l-${Date.now()}`, timestamp: now, message: 'Task created', type: 'info' }],
-      },
-    });
+  async function handleCreateTask(data: Partial<Task>) {
+    await apiCreateTask(data);
   }
 
   const taskAgents = Array.from(
